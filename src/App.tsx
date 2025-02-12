@@ -3,6 +3,7 @@ import Search from "./components/Search";
 import Spinner from "./components/Spinner";
 import MovieCard from "./components/MovieCard";
 import { useDebounce } from "react-use";
+import { getTrendingMovies, updateSearchCount } from "./appwrite";
 
 const API_BASE_URL = "https://api.themoviedb.org/3";
 
@@ -16,17 +17,16 @@ const API_OPTIONS = {
   },
 };
 
-export interface Movie{
+export interface Movie {
   id: number;
   title: string;
   vote_average: number;
   poster_path: string;
   release_date: string;
-  original_language: string
+  original_language: string;
 }
 
-
-interface Movies{
+interface Movies {
   page: string;
   results: Movie[];
   total_pages: number;
@@ -38,7 +38,8 @@ const App = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [movieList, setMovieList] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [debounceSearchTerm, setDebounceSearchTerm] = useState('');
+  const [debounceSearchTerm, setDebounceSearchTerm] = useState("");
+  const [trendingMovies, setTrendingMovies] = useState<Movie[]>([]);
 
   //Debounce the search term to prevent making too many API requests
   //by waiting for the user to stop typing for 500 ms
@@ -46,35 +47,47 @@ const App = () => {
 
   const fetchMovies = async (query: string) => {
     setIsLoading(true);
-    setErrorMessage('');
+    setErrorMessage("");
     try {
-      const endpoint = query ? 
-      `${API_BASE_URL}/search/movie?query=${encodeURIComponent(query)}`
-      : `${API_BASE_URL}/discover/movie?sort_by=popularity.desc`;
+      const endpoint = query
+        ? `${API_BASE_URL}/search/movie?query=${encodeURIComponent(query)}`
+        : `${API_BASE_URL}/discover/movie?sort_by=popularity.desc`;
       const response = await fetch(endpoint, API_OPTIONS);
 
-      if(!response.ok){
-        throw new Error('Failed to fetch movies');
+      if (!response.ok) {
+        throw new Error("Failed to fetch movies");
       }
 
       const data: Movies = await response.json();
-      
-      if(!data.results) {
-        setErrorMessage('Failed to fetch movies');
+
+      if (!data.results) {
+        setErrorMessage("Failed to fetch movies");
         setMovieList([]);
         return;
       }
 
       setMovieList(data.results);
-      console.log(data);
-      
+
+      if (query && data.results.length > 0) {
+        await updateSearchCount(query, data.results[0]);
+      }
     } catch (error) {
-      console.log(`Error fetching movies: ${errorMessage}`);
-      setErrorMessage('Error fetching movies. Please try again later.');
+      console.error(`Error fetching movies: ${error}`);
+      setErrorMessage("Error fetching movies. Please try again later.");
     } finally {
       setIsLoading(false);
     }
   };
+
+  const loadTrendingMovies = async () => {
+    try{
+      const movies = await getTrendingMovies();
+      setTrendingMovies(movies);
+      
+    } catch (error) {
+      console.error(`Error fetching trending movies: ${error}`);
+    }
+  }
 
   useEffect(() => {
     fetchMovies(debounceSearchTerm);
@@ -103,7 +116,7 @@ const App = () => {
           ) : (
             <ul>
               {movieList.map((movie) => (
-                <MovieCard key={movie.id} movie={movie}/>
+                <MovieCard key={movie.id} movie={movie} />
               ))}
             </ul>
           )}
